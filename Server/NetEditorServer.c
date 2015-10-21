@@ -1,5 +1,5 @@
 #include "NetEditorServer.h"
-#define DEBUG 1
+#define DEBUG 0
 #define DBG( ... ) \
 if (DEBUG) {  __VA_ARGS__; }
 
@@ -69,7 +69,9 @@ int init_socket(unsigned int port){
 	/*create socket*/
 	//PF_INET = Protocol Family _ InterNET
 	int sockfd = socket(PF_INET, SOCK_STREAM, 0);
-
+	//let the address be reused; (Solution of cannot connet when reopen)
+	int flag = 1; 
+	setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(int));
 
 	/*server address struct*/
 	//sockaddr_"in" for internet

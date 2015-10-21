@@ -12,6 +12,9 @@ int main(int argc, char **argv){
 	int clientfd;
 	int command;
 
+	int flag = 1; 
+	setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(int));
+	
 	while(1){
 		/*Listen & accept*/
 		listen(sockfd, MAX_CONNECTION);
