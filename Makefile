@@ -1,12 +1,12 @@
 CC ?= gcc
 CFLAGS ?= -O0 -Wall -std=gnu99
 
-PREFIX = NetEditor
+PREFIX = NTE_
 SERVERFILE = $(PREFIX)Server
 CLIENTFILE = $(PREFIX)Client
 
 #argv in program
-PORT = 1212
+PORT = 5278
 
 VPATH = Server:Client
 
@@ -15,7 +15,7 @@ EXEC = Server/server Client/client
 all: $(EXEC)
 
 
-Server/server: main_server.c $(SERVERFILE).o
+Server/server: main_Server.c $(SERVERFILE).o
 	$(CC) $(CFLAGS) -o $@ $^
 
 
@@ -24,7 +24,7 @@ Server/$(SERVERFILE).o: $(SERVERFILE).c $(SERVERFILE).h
 
 
 
-Client/client: main_client.c $(CLIENTFILE).o
+Client/client: main_Client.c $(CLIENTFILE).o
 	$(CC) $(CFLAGS) -o $@ $^
 
 

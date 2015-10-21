@@ -1,52 +1,38 @@
-#include "NetEditorServer.h"
+#include "NTE_Server.h"
 
 
-int main(int argc, char **argv){
+int main(int argc , char **argv){
 
 	int port = 5381;
 	if(argv[1])port = atoi(argv[1]);
-
 	int sockfd = init_socket(port);
+
 	struct sockaddr_in clientAddr;
 	unsigned int addrlen = sizeof(clientAddr);
-	int clientfd;
-	int command;
+	int clientfd, command = _PRINTF;
 
-	int flag = 1; 
-	setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(int));
-	
-	while(1){
+	while(command != _SHUTDOWN){
 		/*Listen & accept*/
 		listen(sockfd, MAX_CONNECTION);
 		printf("Listening for connection.\n" );
 
 		clientfd = accept(sockfd, (struct sockaddr*)&clientAddr, &addrlen);
 		printf("client ip:%s is connect\n", inet_ntoa(clientAddr.sin_addr));
-		//
-
-		command=_COMMAND;
+		
+		/*MAIN LOOP*/
+		command = _PRINTF;
 		clientPrologue(clientfd);
-		while(1){
+		// sendInt(clientfd, __HELP);
+		while(clientfd != -1 && command > 0){
 			ask(clientfd, _COMMAND);
-			recv(clientfd, &command, sizeof(int), 0);
-			printf("get command: %d\n",command);
-			if(command == _QUIT || command == _SHUTDOWN){
-				ask(clientfd, _QUIT);
-				break;
-			}
-
-			deal_with(clientfd,command);
+			command = recvInt(clientfd);
+			deal_with(clientfd, command);
 		}
 
-		printf("close(clientfd=%d)\n",clientfd);
-		/* close(client) */
+		ask(clientfd, _QUIT);
 		close(clientfd);
-		if(command == _SHUTDOWN)break;
-	}	
+	}
 
-printf("Server had been shutdown.\n");
+close(sockfd);
 return 0;
 }
-
-
-
