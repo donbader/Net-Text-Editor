@@ -19,7 +19,7 @@
 
 /*CONSTANTS*/
 #define KB 1024
-#define BUFFER_SIZE 1*KB
+#define BUFFER_SIZE 10*KB
 #define MAX_FILE_NAME 256
 #define MAX_INPUT_COMMAND MAX_FILE_NAME+10
 
@@ -60,7 +60,7 @@ unsigned long data_volume(char *data);
 
 /*FILE OPERATION*/
 char send_file(int sockfd, char *filename);
-void download_file(int sockfd, char *filename);
+void download_file(int sockfd, char *filename, char display_rate);
 //
 
 #endif

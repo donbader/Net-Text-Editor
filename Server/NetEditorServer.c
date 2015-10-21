@@ -148,24 +148,24 @@ void clientSystem(int sockfd, char* string){
 	sendMsg(sockfd, string);
 }
 void clientPrologue(int sockfd){
-	clientPrintf(sockfd, "############################################\n");
-	clientPrintf(sockfd, "|         Welcome to Internet Editor       |\n");
-	clientPrintf(sockfd, "############################################\n");
-	clientPrintf(sockfd, "|There are some option you can choose below|\n");
-	clientPrintf(sockfd, "############################################\n");
+	clientPrintf(sockfd, "########################################################################################\n");
+	clientPrintf(sockfd, "|                            Welcome to Internet Editor                                |\n");
+	clientPrintf(sockfd, "########################################################################################\n");
+	clientPrintf(sockfd, "|                    There are some option you can choose below                        |\n");
+	clientPrintf(sockfd, "########################################################################################\n");
 	clientHelp(sockfd);
-	clientPrintf(sockfd, "############################################\n");
+	clientPrintf(sockfd, "########################################################################################\n");
 
 }
 
 void clientHelp(int sockfd){
-	clientPrintf(sockfd, "[C]reate\n");
-	clientPrintf(sockfd, "[E]dit\n");
-	clientPrintf(sockfd, "[R]emove\n");
+	clientPrintf(sockfd, "[C]reate\t");
+	clientPrintf(sockfd, "[E]dit\t\t");
+	clientPrintf(sockfd, "[R]emove\t");
 	clientPrintf(sockfd, "[L]ist\n");
-	clientPrintf(sockfd, "[D]ownload\n");
-	clientPrintf(sockfd, "[U]pload\n");
-	clientPrintf(sockfd, "[H]elp\n");
+	clientPrintf(sockfd, "[D]ownload\t");
+	clientPrintf(sockfd, "[U]pload\t");
+	clientPrintf(sockfd, "[H]elp\t\t");
 	clientPrintf(sockfd, "[Q]uit\n");
 }
 

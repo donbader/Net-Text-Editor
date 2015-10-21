@@ -19,7 +19,7 @@
 
 /*CONSTANTS*/
 #define KB 1024
-#define BUFFER_SIZE 1*KB
+#define BUFFER_SIZE 10*KB
 #define MAX_FILE_NAME 256
 #define MAX_CONNECTION 20
 

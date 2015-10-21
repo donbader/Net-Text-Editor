@@ -17,11 +17,11 @@ char deal_with(int sockfd, int command){
 
 	switch(command){
 	case _COMMAND:
-		printf("----------------------------\n");
+		printf("--------------------------------------------------------\n");
 		printf("[Cmd]: ");fflush(stdout);
 		scanf("%s",input);
 		ask(sockfd, ItoC(input[0]));
-		printf("----------------------------\n");
+		printf("--------------------------------------------------------\n");
 		if(ItoC(input[0]) == _QUIT)return 0;
 		return 1;
 
@@ -47,7 +47,7 @@ char deal_with(int sockfd, int command){
 		//get filename
 		s_recvData(sockfd, buffer);
 		//buffer means new filename;
-		download_file(sockfd, buffer);
+		download_file(sockfd, buffer,1);
 		return 1;
 
 	case __SEND_FILE:
@@ -152,7 +152,7 @@ char send_file(int sockfd, char* filename){
 	if(lstat(filename, &filestat) < 0){
 		filestat.st_size = 0;
 		write(sockfd, &filestat.st_size, sizeof(filestat.st_size));
-		printf("There is no file \"%s\"", filename);
+		printf("There is no file \"%s\"\n", filename);
 		return 0;
 	}
 	DBG(printf("sending %s...size:%lld\n",filename, filestat.st_size);)
@@ -176,7 +176,7 @@ char send_file(int sockfd, char* filename){
 }
 
 
-void download_file(int sockfd, char *filename){
+void download_file(int sockfd, char *filename, char display_rate){
 	DBG(printf("downloading %s...\n",filename );)
 
 	struct stat filestat;
@@ -188,8 +188,7 @@ void download_file(int sockfd, char *filename){
 		fflush(stdout);
 
 		do{
-			printf("[O]:overwrite [R]:rename --" );
-			fflush(stdout);
+			printf("[O]:overwrite [R]:rename\n[Choice:] " );
 			scanf("%s",choice);
 		}while(toupper(choice[0]) != 'O' && toupper(choice[0]) != 'R');
 
@@ -215,6 +214,7 @@ void download_file(int sockfd, char *filename){
 	unsigned char buffer[BUFFER_SIZE];
 	bzero(buffer, sizeof(buffer));
 
+	int temp_rate = 0;//for proccess rate
 	//download
 	while(real_len - recv_len > 0){
 		len = read(sockfd, buffer, len);
@@ -223,6 +223,14 @@ void download_file(int sockfd, char *filename){
 		fflush(file_p);
 		if(real_len - recv_len < len)
 			len = real_len - recv_len;
+
+		if(display_rate && recv_len*100/real_len != temp_rate){
+			//(delete last line)
+			fputs("\033[A\033[2K",stdout);
+			rewind(stdout);	
+			temp_rate++;
+			printf("%d%%\n", temp_rate);
+		}
 	}
 	DBG(printf("-------------------download_file(%s)...ok\n",filename);)
 	return ;
