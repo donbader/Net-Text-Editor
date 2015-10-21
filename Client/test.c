@@ -1,3 +1,0 @@
-HIHI
-Hello!!
-joiajiosdioasdfiojdiosf
