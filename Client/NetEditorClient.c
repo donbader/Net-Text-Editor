@@ -152,6 +152,7 @@ char send_file(int sockfd, char* filename){
 	if(lstat(filename, &filestat) < 0){
 		filestat.st_size = 0;
 		write(sockfd, &filestat.st_size, sizeof(filestat.st_size));
+		printf("There is no file \"%s\"", filename);
 		return 0;
 	}
 	DBG(printf("sending %s...size:%lld\n",filename, filestat.st_size);)

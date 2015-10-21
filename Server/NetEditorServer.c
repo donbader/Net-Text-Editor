@@ -320,7 +320,7 @@ void edit_file(int sockfd, char *filename){
 	//rename()
 	//send file as .file.temp
 	ask(sockfd, __DOWNLOAD_FILE);
-	char *tempName = va_strcat(".",filename,0);
+	char *tempName = va_strcat(".temp.",filename,0);
 	printf("rename:%s",tempName);
 	sendMsg(sockfd, tempName);
 	send_file(sockfd, filename);
