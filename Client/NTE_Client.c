@@ -31,8 +31,8 @@ void StoI(int sockfd, char *string){
 			printf("[Batch-CMD] ");
 			scanf("%s", string);
 			switch(toupper(string[0])){
-				case 'C':ask(sockfd, __AUTO_CREATE_FILE);break;
-				case 'R':ask(sockfd, __AUTO_REMOVE_FILE);break;
+				case 'C':ask(sockfd, __CREATE_FILE);break;
+				case 'R':ask(sockfd, __REMOVE_FILE);break;
 				case 'D':ask(sockfd, __AUTO_SEND_FILE);break;
 				case 'U':ask(sockfd, __AUTO_DOWNLOAD_FILE);break;
 				case 'Q':printf("Quit batch mode.\n");
@@ -88,14 +88,17 @@ void deal_with(int sockfd, int command){
 			printf("filename: ");fflush(stdout);
 			scanf("%s",input);
 			//get filesize
-			if(file_size(input) == -1)
-				printf("\"%s\" is not exist.\n",input);
+			// if(file_size(input) == -1)
+			// 	printf("\"%s\" is not exist.\n",input);
 			
-			msg = input;
 			freeFlag = 0;
-			sendString(sockfd, msg);
+			sendString(sockfd, input);
 		case __AUTO_SEND_FILE:
-			if(!msg) msg = recvString(sockfd);
+			msg = recvString(sockfd);
+			if(input[0]){
+				free(msg);
+				msg = input;
+			}
 			sendFILE(sockfd, msg);
 			break;
 
@@ -103,13 +106,14 @@ void deal_with(int sockfd, int command){
 			printf("filename: ");fflush(stdout);
 			scanf("%s",input);
 			sendString(sockfd, input);
-			msg = input;
 			freeFlag = 0;
-			//get filesize
-			if(recvLLONG(sockfd) == -1)
-				printf("\"%s\" is not exist.\n",msg);
+
 		case __AUTO_DOWNLOAD_FILE:
-			if(!msg)msg = recvString(sockfd);
+			msg = recvString(sockfd);
+			if(input[0]){
+				free(msg);
+				msg = input;
+			}
 			recvFILE(sockfd, msg);
 			break;
 
@@ -127,7 +131,12 @@ void deal_with(int sockfd, int command){
 
 			for(j=0;j<i;j++){
 				sendString(sockfd, name[j]);
-				deal_with(sockfd, recvInt(sockfd));
+				// dealing 
+				while(command > 0){
+					command = recvInt(sockfd);
+					deal_with(sockfd, command);
+				}
+				command = _COMMAND;
 			}
 
 			break;
@@ -242,7 +251,7 @@ char recvFILE(int sockfd, char* fileName){
 	fileSize = recvLLONG(sockfd);
 
 
-	if(fileSize == -1)return -1;  //file isn't exist
+	if(fileSize < 0)return fileSize;  
 	//
 	/*open an empty file*/
 	FILE* fptr = fopen(fileName, "wb");
@@ -250,6 +259,7 @@ char recvFILE(int sockfd, char* fileName){
 	char buffer[BUFFER_SIZE]="";
 	int temp_rate = 0;
 	long long recvSize = 0, len = BUFFER_SIZE;
+	printf("%s: 0%%\n",fileName);
 	while(fileSize - recvSize>0){
 		len = read(sockfd, buffer, len);
 		recvSize += len;
@@ -258,13 +268,14 @@ char recvFILE(int sockfd, char* fileName){
 		if(fileSize - recvSize < len)
 			len = fileSize - recvSize;
 		if(recvSize*100/fileSize != temp_rate)
-			printDisappearRate(temp_rate++);
+			printDisappearRate(fileName,temp_rate++);
 	}
-	printDisappearRate(temp_rate);
+
+	printDisappearRate(fileName,temp_rate);
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	//tell server file is finished
-	DBG(printf("-----recvFILE(%s)\n",fileName);)
+	DBG(printf("-----recvFILE(%s)\nfileSize:%lld\n",fileName,fileSize);)
 	sendInt(sockfd, 1);
 	return 1;
 }
@@ -310,11 +321,11 @@ char *va_strcat(char *first, ...){
 }
 
 
-void printDisappearRate(int rate){
+void printDisappearRate(char *fileName,int rate){
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	for(int i=0;i<rate/10;i++)printf("=");
-	printf("%d%%\n", rate);
+	printf("%s: %d%%\n",fileName, rate);
 }
 
 void split(char **arr, char *str, const char *del) {

@@ -92,7 +92,7 @@ void create_file(char* fileName);
 /*TOOLS*/
 char *va_strcat(char *first, ...);
 long long file_size(char* fileName);
-void printDisappearRate(int rate);
+void printDisappearRate(char *fileName,int rate);
 void split(char **arr, char *str, const char *del);
 
 #endif

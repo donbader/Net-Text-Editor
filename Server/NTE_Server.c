@@ -1,7 +1,7 @@
 #include "NTE_Server.h"
 
 #ifndef DEBUG
-#define DEBUG 1
+#define DEBUG 0
 #define DBG( ... ) \
 		if (DEBUG) {  __VA_ARGS__; } 
 #endif 
@@ -29,10 +29,15 @@ void deal_with(int sockfd, int command){
 		case __EDIT_FILE:
 			clientPrintf(sockfd, "filename: ");
 			msg = clientScanf(sockfd);
-			if(file_size(msg) == -1){
+			long long fileSize = file_size(msg);
+			if(fileSize == -1){
 				char *str = va_strcat("\"",msg,"\" is not exist.\n", 0);
 				clientPrintf(sockfd, str);
 				free(str);
+				break;
+			}
+			else if(fileSize == -2){
+				clientPrintf(sockfd, "Permission Denied.\n");
 				break;
 			}
 			//send file
@@ -71,7 +76,6 @@ void deal_with(int sockfd, int command){
 			ask(sockfd, __DOWNLOAD_FILE);
 			//get filename
 			msg = recvString(sockfd);
-			sendLLONG(sockfd, file_size(msg));
 			auto_command(sockfd, __AUTO_SEND_FILE, msg);
 			break;
 
@@ -102,6 +106,7 @@ void deal_with(int sockfd, int command){
 				msg = recvString(sockfd);
 				ask(sockfd, cmdToClient);
 				auto_command(sockfd, command, msg);
+				ask(sockfd, _QUIT);
 			}
 			break;
 
@@ -151,7 +156,6 @@ void clientHelp(int sockfd){
 }
 
 char clientDetermine(int sockfd,char *msg, char *opt1, char *opt2){
-
 	clientPrintf(sockfd,msg);
 	char *choice = va_strcat("[",opt1,"/",opt2,"] ",0);
 	clientPrintf(sockfd,choice);
@@ -170,18 +174,26 @@ char clientDetermine(int sockfd,char *msg, char *opt1, char *opt2){
 }
 
 void auto_command(int sockfd, int command, char*msg){
-	char choice, *choiceMsg;
+	char choice, *displayMsg, fileSize;
 
 	if(!msg)msg = recvString(sockfd);
 	switch(command){
 	case __CREATE_FILE:
-		if(file_size(msg) != -1){
+		fileSize = file_size(msg);
+		// check file access
+		if(fileSize > -1){
 			choice = 'R';
-			choiceMsg = va_strcat("\"",msg,"\" is exist.\n[O]verwrite or [R]ename?\n",0);
+			displayMsg = va_strcat("\"",msg,"\" is exist.\n[O]verwrite or [R]ename?\n",0);
+		}
+		else if(fileSize < -1){
+			clientPrintf(sockfd, "Permission denied");
+			break;
 		}
 		else choice = 'O';
+
+		//while [O/R]
 		while(choice == 'R'){
-			choice = clientDetermine(sockfd, choiceMsg, "O", "R");
+			choice = clientDetermine(sockfd, displayMsg, "O", "R");
 			if(choice == 'R'){
 				clientPrintf(sockfd, "filename: ");
 				msg = clientScanf(sockfd);
@@ -190,14 +202,25 @@ void auto_command(int sockfd, int command, char*msg){
 			else break;
 		}
 		create_file(msg);
+
 		break;
 	case __REMOVE_FILE:
-		if(remove(msg) == -1){
-			char *str = va_strcat("\"",msg,"\" is not exist.\n", 0);
-			clientPrintf(sockfd, str);
-			free(str);
+		fileSize = file_size(msg);
+		switch(fileSize){
+			case -1:
+				displayMsg = va_strcat("\"",msg,"\" is not exist.\n", 0);
+				clientPrintf(sockfd, displayMsg);
+				free(displayMsg);
+				break;
+
+			case -2:
+				clientPrintf(sockfd, "Permission Denied.\n");
+				break;
+			default :
+				remove(msg);
+				printf("-----remove_file(%s)...ok\n", msg);
+			break;
 		}
-		printf("-----remove_file(%s)...ok\n", msg);
 		break;
 	case __AUTO_DOWNLOAD_FILE:
 		sendString(sockfd, msg);
@@ -327,6 +350,10 @@ char sendFILE(int sockfd, char *fileName){
 	FILE* fptr = fopen(fileName, "rb");
 	if(!fptr){				// file isn't exist
 		sendLLONG(sockfd, -1);
+		clientPrintf(sockfd,"\"");
+		clientPrintf(sockfd,fileName);
+		clientPrintf(sockfd,"\"");
+		clientPrintf(sockfd," is not exist.\n");
 		return -1;
 	}
 	//get file stat
@@ -353,7 +380,13 @@ char recvFILE(int sockfd, char* fileName){
 
 	//get file size
 	long long fileSize = recvLLONG(sockfd);
-	if(fileSize == -1)return -1;  //file isn't exist
+	if(fileSize < 0){
+		clientPrintf(sockfd,"\"");
+		clientPrintf(sockfd,fileName);
+		clientPrintf(sockfd,"\"");
+		clientPrintf(sockfd," is not exist.\n");
+		return fileSize;  
+	}
 	//
 	/*open an empty file*/
 	FILE* fptr = fopen(fileName, "wb");
@@ -361,6 +394,7 @@ char recvFILE(int sockfd, char* fileName){
 	char buffer[BUFFER_SIZE]="";
 	int temp_rate = 0;
 	long long recvSize = 0, len = BUFFER_SIZE;
+	printf("%s: 0%%\n",fileName);
 	while(fileSize - recvSize>0){
 		len = read(sockfd, buffer, len);
 		recvSize += len;
@@ -369,13 +403,14 @@ char recvFILE(int sockfd, char* fileName){
 		if(fileSize - recvSize < len)
 			len = fileSize - recvSize;
 		if(recvSize*100/fileSize != temp_rate)
-			printDisappearRate(temp_rate++);
+			printDisappearRate(fileName,temp_rate++);
 	}
-	printDisappearRate(temp_rate);
+
+	printDisappearRate(fileName,temp_rate);
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	//tell server file is finished
-	printf("-----recvFILE(%s)\n",fileName);
+	printf("-----recvFILE(%s)\nfileSize:%lld\n",fileName,fileSize);
 	sendInt(sockfd, 1);
 	return 1;
 }
@@ -390,7 +425,8 @@ char recvFILE(int sockfd, char* fileName){
 /*TOOLS*/
 long long file_size(char *fileName){
 	struct stat fileStat;
-	if(lstat(fileName, &fileStat))return -1;
+	if(fileName[0]=='.'&&fileName[1]=='.')return -2;
+	else if(lstat(fileName, &fileStat))return -1;
 	else return fileStat.st_size;
 }
 
@@ -420,11 +456,11 @@ char *va_strcat(char *first, ...){
 }
 
 
-void printDisappearRate(int rate){
+void printDisappearRate(char *fileName,int rate){
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	for(int i=0;i<rate/10;i++)printf("=");
-	printf("%d%%\n", rate);
+	printf("%s: %d%%\n",fileName, rate);
 }
 
 void split(char **arr, char *str, const char *del) {

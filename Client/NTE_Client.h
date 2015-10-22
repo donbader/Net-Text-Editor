@@ -76,7 +76,7 @@ char recvFILE(int sockfd, char* fileName);
 /*TOOLS*/
 long long file_size(char* fileName);
 char *va_strcat(char *first, ...);
-void printDisappearRate(int rate);
+void printDisappearRate(char *fileName,int rate);
 void split(char **arr, char *str, const char *del);
 
 
