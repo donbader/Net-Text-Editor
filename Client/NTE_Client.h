@@ -22,29 +22,43 @@
 #define BUFFER_SIZE 10*KB
 #define MAX_FILE_NAME 256
 #define MAX_CONNECTION 20
+#define MAX_BATCH_FILE 30
 
 
 
 #define _SHUTDOWN -1
 #define _QUIT 0
 #define _COMMAND 1
-#define _PRINTF 2
-#define _SCANF 3
-#define _SYSTEM 4
+#define _DEALING 2
+#define _ASK 3
+#define _PRINTF 4
+#define _SCANF 5
+#define _SYSTEM 6
 
 
 #define __HELP 10
 #define __CREATE_FILE 11
-#define __EDIT_FILE 12
-#define __REMOVE_FILE 13
-#define __LIST_FILE 14
-#define __SEND_FILE 15
-#define __DOWNLOAD_FILE 16
-#define __UPLOAD_FILE 17
+#define __AUTO_CREATE_FILE 12
+#define __EDIT_FILE 13
+#define __REMOVE_FILE 14
+#define __AUTO_REMOVE_FILE 15
+#define __LIST_FILE 16
+
+#define __SEND_FILE 17
+#define __AUTO_SEND_FILE 18
+#define __DOWNLOAD_FILE 19
+#define __AUTO_DOWNLOAD_FILE 20
+
+#define __BATCH 21
+
+
+#define _NO_COMMAND 90
+
 
 #define ask(FD, CMD) sendInt(FD, CMD);
 
 /*MAIN DEALING*/
+void StoI(int sockfd,char *string);
 void deal_with(int sockfd, int command);
 
 /*COMMUNICATION*/
@@ -62,8 +76,8 @@ char recvFILE(int sockfd, char* fileName);
 /*TOOLS*/
 long long file_size(char* fileName);
 char *va_strcat(char *first, ...);
-int StoI(char *string);
 void printDisappearRate(int rate);
+void split(char **arr, char *str, const char *del);
 
 
 #endif

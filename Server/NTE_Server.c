@@ -1,7 +1,7 @@
 #include "NTE_Server.h"
 
 #ifndef DEBUG
-#define DEBUG 0
+#define DEBUG 1
 #define DBG( ... ) \
 		if (DEBUG) {  __VA_ARGS__; } 
 #endif 
@@ -15,25 +15,16 @@
 void deal_with(int sockfd, int command){
 	DBG(printf("client command: %d\n",command);)
 	char *msg=NULL;
-	char choice;
+	int i,num_of_files ;
+
 	switch(command){
 		case _SHUTDOWN:
 		case _QUIT:return;
 		case __HELP:clientHelp(sockfd);break;
 		case __CREATE_FILE:
-			choice = 'R';
-			while(choice == 'R'){
-				clientPrintf(sockfd, "filename: ");
-				msg = clientScanf(sockfd);
-				if(file_size(msg) == -1)choice = 'O';
-				else{
-					char *str = \
-						va_strcat("\"",msg,"\" is exist.\n[O]verwrite or [R]ename?\n",0);
-					choice = clientDetermine(sockfd, str, "O", "R");
-					free(str);	
-				}
-				if(choice == 'O')create_file(msg);
-			}
+			clientPrintf(sockfd, "filename: ");
+			msg = clientScanf(sockfd);
+			auto_command(sockfd, command, msg);
 			break;
 		case __EDIT_FILE:
 			clientPrintf(sockfd, "filename: ");
@@ -45,7 +36,7 @@ void deal_with(int sockfd, int command){
 				break;
 			}
 			//send file
-			ask(sockfd, __DOWNLOAD_FILE);
+			ask(sockfd, __AUTO_DOWNLOAD_FILE);
 			char *tempName = va_strcat(".temp.",msg,0);
 			sendString(sockfd, tempName);
 			sendFILE(sockfd, msg);
@@ -54,7 +45,7 @@ void deal_with(int sockfd, int command){
 			char *cmd = va_strcat("vi ",tempName);
 			sendString(sockfd, cmd);
 			//download file
-			ask(sockfd, __SEND_FILE);
+			ask(sockfd, __AUTO_SEND_FILE);
 			sendString(sockfd, tempName);
 			recvFILE(sockfd, msg);
 
@@ -65,46 +56,62 @@ void deal_with(int sockfd, int command){
 
 			free(tempName);
 			break;
+
 		case __REMOVE_FILE:
 			clientPrintf(sockfd, "filename: ");
-			msg = clientScanf(sockfd);
-			if(remove(msg) == -1){
-				char *str = va_strcat("\"",msg,"\" is not exist.\n", 0);
-				clientPrintf(sockfd, str);
-				free(str);
-			}
+			ask(sockfd, _SCANF);
+			auto_command(sockfd, command, msg);
 			break;
 		case __LIST_FILE:
 			msg = list_file(".");
 			clientPrintf(sockfd,msg);
 			break;
-		case __SEND_FILE:
-			clientPrintf(sockfd, "filename: ");
-			msg = clientScanf(sockfd);
-			if(file_size(msg) == -1){
-				char *str = va_strcat("\"",msg,"\" is not exist.\n", 0);
-				clientPrintf(sockfd, str);
-				free(str);
-			}
-			else {
-				//send filename
-				ask(sockfd, __DOWNLOAD_FILE);
-				sendString(sockfd, msg);
-				sendFILE(sockfd, msg);
-			}
-			break;
-		case __DOWNLOAD_FILE:
-			ask(sockfd, __UPLOAD_FILE);
-			msg = recvString(sockfd);
-			recvFILE(sockfd, msg);
-			break;
-		default:
-			clientPrintf(sockfd, "There is no this kind of command!\n");
-	}
 
+		case __SEND_FILE:
+			ask(sockfd, __DOWNLOAD_FILE);
+			//get filename
+			msg = recvString(sockfd);
+			sendLLONG(sockfd, file_size(msg));
+			auto_command(sockfd, __AUTO_SEND_FILE, msg);
+			break;
+
+		case __DOWNLOAD_FILE:
+			ask(sockfd, __SEND_FILE);
+			auto_command(sockfd, __AUTO_DOWNLOAD_FILE, msg);
+			break;
+				
+		case __BATCH:
+			//get batch operation
+			command = recvInt(sockfd);
+			//interpret command
+			if(command == _NO_COMMAND)break;
+			ask(sockfd, __BATCH);
+			num_of_files = recvInt(sockfd);
+			printf("server will deal_with() %d files\n", num_of_files);
+
+			int cmdToClient;
+			switch(command){
+				case __CREATE_FILE:case __REMOVE_FILE:
+					cmdToClient = _NO_COMMAND;break;
+				case __AUTO_SEND_FILE: cmdToClient = __AUTO_DOWNLOAD_FILE;break;
+				case __AUTO_DOWNLOAD_FILE: cmdToClient = __AUTO_SEND_FILE;break;
+				default : printf("ERROR!?command%d\n",command);
+			}
+
+			for(i=0;i<num_of_files;i++){
+				msg = recvString(sockfd);
+				ask(sockfd, cmdToClient);
+				auto_command(sockfd, command, msg);
+			}
+			break;
+
+		default:
+			clientPrintf(sockfd, "No such command!\n");
+	}
 	if(msg)free(msg);
 }
 
+/*Task*/
 void clientPrintf(int sockfd, char *str){
 	ask(sockfd, _PRINTF);
 	sendString(sockfd, str);
@@ -138,11 +145,13 @@ void clientHelp(int sockfd){
 	clientPrintf(sockfd, "[L]ist\n");
 	clientPrintf(sockfd, "[D]ownload\t");
 	clientPrintf(sockfd, "[U]pload\t");
-	clientPrintf(sockfd, "[H]elp\t\t");
+	clientPrintf(sockfd, "[H]elp\t\n");
+	clientPrintf(sockfd, "[B]atch\t\t");
 	clientPrintf(sockfd, "[Q]uit\n");
 }
 
 char clientDetermine(int sockfd,char *msg, char *opt1, char *opt2){
+
 	clientPrintf(sockfd,msg);
 	char *choice = va_strcat("[",opt1,"/",opt2,"] ",0);
 	clientPrintf(sockfd,choice);
@@ -159,6 +168,48 @@ char clientDetermine(int sockfd,char *msg, char *opt1, char *opt2){
 	free(choice);
 	return toupper(c);
 }
+
+void auto_command(int sockfd, int command, char*msg){
+	char choice, *choiceMsg;
+
+	if(!msg)msg = recvString(sockfd);
+	switch(command){
+	case __CREATE_FILE:
+		if(file_size(msg) != -1){
+			choice = 'R';
+			choiceMsg = va_strcat("\"",msg,"\" is exist.\n[O]verwrite or [R]ename?\n",0);
+		}
+		else choice = 'O';
+		while(choice == 'R'){
+			choice = clientDetermine(sockfd, choiceMsg, "O", "R");
+			if(choice == 'R'){
+				clientPrintf(sockfd, "filename: ");
+				msg = clientScanf(sockfd);
+			}
+			if(choice == 'R' && file_size(msg) != -1)continue;
+			else break;
+		}
+		create_file(msg);
+		break;
+	case __REMOVE_FILE:
+		if(remove(msg) == -1){
+			char *str = va_strcat("\"",msg,"\" is not exist.\n", 0);
+			clientPrintf(sockfd, str);
+			free(str);
+		}
+		printf("-----remove_file(%s)...ok\n", msg);
+		break;
+	case __AUTO_DOWNLOAD_FILE:
+		sendString(sockfd, msg);
+		recvFILE(sockfd, msg);break;
+	case __AUTO_SEND_FILE:
+		sendString(sockfd, msg);
+		sendFILE(sockfd, msg);break;
+
+	}
+
+}
+
 
 /*FILE OPERATION*/
 /*FILE OPERATION*/
@@ -236,18 +287,18 @@ void sendInt(int sockfd, int num){
 }
 int recvInt(int sockfd){
 	int num;
-	read( sockfd, &num, sizeof(int));
-	DBG(printf("-----recvInt(): %d\n",num);)
+	int r = read( sockfd, &num, sizeof(int));
+	DBG(printf("-----recvInt(%d/%lu): %d\n",r,sizeof(int),num);)
 	return num; 
 }
 void sendLLONG(int sockfd, long long num){
 	DBG(printf("-----sendLLONG(): %lld\n",num);)
-	write( sockfd, &num, sizeof(long long));
+	write( sockfd, &num, sizeof(long long));	
 }
 long long recvLLONG(int sockfd){
 	long long num;
-	read( sockfd, &num, sizeof(long long));
-	DBG(printf("-----recvLLONG(): %lld\n", num);)
+	int r = read( sockfd, &num, sizeof(long long));
+	DBG(printf("-----recvLLONG(%d/%lu): %lld\n",r,sizeof(long long), num);)
 	return num;
 }
 
@@ -257,16 +308,16 @@ void sendString(int sockfd, char* string){
 	sendInt( sockfd, size);
 	//send string
 	write( sockfd, string, size);
-	DBG(printf("-----sendString():%s\n", string);)
+	DBG(printf("-----sendString():%s\nlen=%d\n", string, size);)
 }
 char *recvString(int sockfd){
 	//recv data size
 	int size = recvInt(sockfd);
 	char *string = malloc(size+1);
 	//recv data
-	read( sockfd, string, size);
+	int r = read( sockfd, string, size);
 	string[size] = '\0';
-	DBG(printf("-----recvString():%s\n", string);)
+	DBG(printf("-----recvString(%d/%d):%s\n", r, size, string);)
 	return string;
 }
 
@@ -278,7 +329,6 @@ char sendFILE(int sockfd, char *fileName){
 		sendLLONG(sockfd, -1);
 		return -1;
 	}
-
 	//get file stat
 	sendLLONG(sockfd, file_size(fileName));// send file size
 	
@@ -294,7 +344,7 @@ char sendFILE(int sockfd, char *fileName){
 	fclose(fptr);
 	//check if file is finished
 	if(recvInt(sockfd)!=1)return 0;
-	DBG(printf("-----sendFILE(%s)\n",fileName);)
+	printf("-----sendFILE(%s)\n",fileName);
 	return 1;
 }
 
@@ -325,8 +375,8 @@ char recvFILE(int sockfd, char* fileName){
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	//tell server file is finished
-	sendInt(sockfd, 1);
 	printf("-----recvFILE(%s)\n",fileName);
+	sendInt(sockfd, 1);
 	return 1;
 }
 //
@@ -377,5 +427,13 @@ void printDisappearRate(int rate){
 	printf("%d%%\n", rate);
 }
 
+void split(char **arr, char *str, const char *del) {
+   char *s = strtok(str, del);
+   
+   while(s != NULL) {
+     *arr++ = s;
+     s = strtok(NULL, del);
+   }
+ }
 
 

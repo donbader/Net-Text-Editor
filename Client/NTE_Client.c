@@ -12,19 +12,58 @@
 /*MAIN DEALING FUNCTION*/
 /*MAIN DEALING FUNCTION*/
 
+
+void StoI(int sockfd, char *string){
+	switch(toupper(string[0])){
+	case 'C':ask(sockfd, __CREATE_FILE);break;
+	case 'E':ask(sockfd, __EDIT_FILE);break;
+	case 'R':ask(sockfd, __REMOVE_FILE);break;
+	case 'L':ask(sockfd, __LIST_FILE);break;
+	case 'D':ask(sockfd, __SEND_FILE);break;
+	case 'U':ask(sockfd, __DOWNLOAD_FILE);break;
+	case 'H':ask(sockfd, __HELP);break;
+	case 'Q':ask(sockfd, _QUIT);break;
+	case 'B':ask(sockfd, __BATCH);
+			printf("[C]reate\t");
+			printf("[R]emove\n");
+			printf("[D]ownload\t");
+			printf("[U]pload\n");
+			printf("[Batch-CMD] ");
+			scanf("%s", string);
+			switch(toupper(string[0])){
+				case 'C':ask(sockfd, __AUTO_CREATE_FILE);break;
+				case 'R':ask(sockfd, __AUTO_REMOVE_FILE);break;
+				case 'D':ask(sockfd, __AUTO_SEND_FILE);break;
+				case 'U':ask(sockfd, __AUTO_DOWNLOAD_FILE);break;
+				case 'Q':printf("Quit batch mode.\n");
+				default: ask(sockfd, _NO_COMMAND);
+				break;
+			}
+			break;
+	case '0':printf("Server will be shutdown.\n");
+			ask(sockfd, _SHUTDOWN);
+			break;
+	default: ask(sockfd, _NO_COMMAND);
+	}
+}
+
 void deal_with(int sockfd, int command){
 	DBG(printf("server command: %d\n",command);)
-	char input[MAX_FILE_NAME]="";
+	char input[MAX_FILE_NAME]="", freeFlag = 0;
 	char *msg = NULL;
+	char *name[MAX_BATCH_FILE] = {""};
+	int i,j;
+
 	switch(command){
 		case _SHUTDOWN :
 		case _QUIT :return;
+		case _NO_COMMAND:break;
 		case _COMMAND :
 			printf("--------------------------------------------------------\n");
 			printf("[CMD] ");fflush(stdout);
 			scanf("%s",input);
 			printf("--------------------------------------------------------\n");
-			ask(sockfd, StoI(input));
+			StoI(sockfd, input);
 			break;
 		case _PRINTF :
 			msg = recvString(sockfd);
@@ -45,30 +84,59 @@ void deal_with(int sockfd, int command){
 			remove(msg);
 			break;
 
-		case __DOWNLOAD_FILE:
-			msg = recvString(sockfd);
-			recvFILE(sockfd, msg);
-			break;
 		case __SEND_FILE:
-			msg = recvString(sockfd);
+			printf("filename: ");fflush(stdout);
+			scanf("%s",input);
+			//get filesize
+			if(file_size(input) == -1)
+				printf("\"%s\" is not exist.\n",input);
+			
+			msg = input;
+			freeFlag = 0;
+			sendString(sockfd, msg);
+		case __AUTO_SEND_FILE:
+			if(!msg) msg = recvString(sockfd);
 			sendFILE(sockfd, msg);
 			break;
 
-		case __UPLOAD_FILE:
-			//give filename
+		case __DOWNLOAD_FILE:
 			printf("filename: ");fflush(stdout);
 			scanf("%s",input);
-			if(file_size(input) == -1)
-				printf("\"%s\"is not exist.\n",input);
 			sendString(sockfd, input);
-			sendFILE(sockfd, input);
+			msg = input;
+			freeFlag = 0;
+			//get filesize
+			if(recvLLONG(sockfd) == -1)
+				printf("\"%s\" is not exist.\n",msg);
+		case __AUTO_DOWNLOAD_FILE:
+			if(!msg)msg = recvString(sockfd);
+			recvFILE(sockfd, msg);
 			break;
 
-		default:
-			ask(sockfd, command);
+		case __BATCH:
+			printf("Use ',' to split the filename\n");
+			printf("(Ex) [Batch Mode] filename1,filename2,filename3 \n");
+			printf("[Batch Mode] ");fflush(stdout);
+			scanf("%s",input);
+			msg = input;
+			freeFlag = 0;
+			// send how man files
+			split(name,msg,",");
+			for(i=0;i<MAX_BATCH_FILE;i++)if(name[i]==NULL)break;
+			sendInt(sockfd, i);
+
+			for(j=0;j<i;j++){
+				sendString(sockfd, name[j]);
+				deal_with(sockfd, recvInt(sockfd));
+			}
+
+			break;
+		default:printf("ERROR!?\n");
 	}
 
-	if(msg)free(msg);
+	if(msg && freeFlag)
+		free(msg);
+
 }
 
 
@@ -104,8 +172,8 @@ void sendInt(int sockfd, int num){
 }
 int recvInt(int sockfd){
 	int num;
-	read( sockfd, &num, sizeof(int));
-	DBG(printf("-----recvInt(): %d\n",num);)
+	int r = read( sockfd, &num, sizeof(int));
+	DBG(printf("-----recvInt(%d/%lu): %d\n",r,sizeof(int),num);)
 	return num; 
 }
 void sendLLONG(int sockfd, long long num){
@@ -113,9 +181,9 @@ void sendLLONG(int sockfd, long long num){
 	write( sockfd, &num, sizeof(long long));
 }
 long long recvLLONG(int sockfd){
-	long long num;
-	read( sockfd, &num, sizeof(long long));
-	DBG(printf("-----recvLLONG(): %lld\n", num);)
+	long long num=0;
+	int r = read( sockfd, &num, sizeof(long long));
+	DBG(printf("-----recvLLONG(%d/%lu): %lld\n",r,sizeof(long long), num);)
 	return num;
 }
 
@@ -125,16 +193,16 @@ void sendString(int sockfd, char* string){
 	sendInt( sockfd, size);
 	//send string
 	write( sockfd, string, size);
-	DBG(printf("-----sendString():%s\n", string);)
+	DBG(printf("-----sendString():%s\nlen=%d\n", string,size);)
 }
 char *recvString(int sockfd){
 	//recv data size
 	int size = recvInt(sockfd);
 	char *string = malloc(size+1);
 	//recv data
-	read( sockfd, string, size);
+	int r =read( sockfd, string, size);
 	string[size] = '\0';
-	DBG(printf("-----recvString():%s.\n", string);)
+	DBG(printf("-----recvString(%d/%d):%s\n", r, size, string);)
 	return string;
 }
 
@@ -168,9 +236,12 @@ char sendFILE(int sockfd, char *fileName){
 
 char recvFILE(int sockfd, char* fileName){
 	if(!fileName)return 0; //ask for retype fileName
-
+	
 	//get file size
-	long long fileSize = recvLLONG(sockfd);
+	long long fileSize = 0;
+	fileSize = recvLLONG(sockfd);
+
+
 	if(fileSize == -1)return -1;  //file isn't exist
 	//
 	/*open an empty file*/
@@ -193,8 +264,8 @@ char recvFILE(int sockfd, char* fileName){
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	//tell server file is finished
-	sendInt(sockfd, 1);
 	DBG(printf("-----recvFILE(%s)\n",fileName);)
+	sendInt(sockfd, 1);
 	return 1;
 }
 
@@ -239,28 +310,21 @@ char *va_strcat(char *first, ...){
 }
 
 
-int StoI(char *string){
-	switch(toupper(string[0])){
-	case 'C':return __CREATE_FILE;
-	case 'E':return __EDIT_FILE;
-	case 'R':return __REMOVE_FILE;
-	case 'L':return __LIST_FILE;
-	case 'D':return __SEND_FILE;
-	case 'U':return __DOWNLOAD_FILE;
-	case 'H':return __HELP;
-	case 'Q':return _QUIT;
-	case '0':printf("Server will be shutdown.\n");
-			return _SHUTDOWN;
-	default: return 90;
-	}
-}
-
 void printDisappearRate(int rate){
 	fputs("\033[A\033[2K",stdout);
 	rewind(stdout);	
 	for(int i=0;i<rate/10;i++)printf("=");
 	printf("%d%%\n", rate);
 }
+
+void split(char **arr, char *str, const char *del) {
+	char *s = strtok(str, del);
+
+	while(s != NULL) {
+		*arr++ = s;
+		s = strtok(NULL, del);
+	}
+ }
 
 
 
